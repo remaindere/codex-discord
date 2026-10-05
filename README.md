@@ -83,7 +83,9 @@ python -m pip install -e ./bot
 cp bot/src/bot/.env.example bot/src/bot/.env
 ```
 
-그다음 `bot/src/bot/.env`에 Discord, 모델, AWS/Mantle, 가격표 등의 런타임 설정을 입력합니다. 실제 비밀값이 들어 있는 `.env`는 저장소에 커밋하지 마세요.
+그다음 `bot/src/bot/.env`에 Discord, 모델, AWS/Mantle, 가격표 등의 런타임 설정을 입력합니다.
+
+#### 실제 패스워드 및 민감한 키값 등등이 기재된 `.env`는 .gitignore에 적어놓고, 원격 저장소에 올라가지 않게 주의하세요.
 
 ## 실행
 
@@ -94,6 +96,8 @@ python -m bot.discord_bot
 ```
 
 패키지를 editable 모드로 설치하지 않았다면 다음처럼 실행할 수도 있습니다.
+
+[그러나 editable 모드 사용을 권장합니다]
 
 ```bash
 PYTHONPATH=bot/src python -m bot.discord_bot
@@ -119,7 +123,9 @@ cd ~/codex-discord/bot
 python -m pytest -q
 ```
 
-단위 테스트는 라우팅, 설정, 첨부파일 안전성, Discord 처리 흐름, 메모리 보호, 메시지 분할, 저장소 동작을 검사합니다. 통합 테스트는 임시 Git 저장소와 PDF를 이용하며 실제 외부 모델 API를 호출하지 않습니다. 현재(26/10/06) pytest-cov를 이용한 커버리지 측정 결과, 전체 라인 기준 85% 커버리지를 지니고 있습니다.
+단위 테스트는 라우팅, 설정, 첨부파일 안전성, Discord 처리 흐름, 메모리 보호, 메시지 분할, 저장소 동작을 검사합니다. 통합 테스트는 임시 Git 저장소와 PDF를 이용하며 실제 외부 모델 API를 호출하지 않습니다.
+
+현재(26/10/06) pytest-cov를 이용한 커버리지 측정 결과, 전체 라인 기준 85% 커버리지를 지니고 있습니다.
 
 ## 데이터와 안전 정책
 
