@@ -188,7 +188,7 @@ class Settings:
         if missing:
             raise ValueError(f"missing required runtime settings: {', '.join(missing)}")
         unpriced = {
-            self.default_model,
+            self.codex_model,
             self.chat_model,
         } - self.model_prices.keys()
         if unpriced:
