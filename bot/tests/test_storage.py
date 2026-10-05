@@ -1,6 +1,6 @@
-import Path
 import json
 import asyncio
+from pathlib import Path
 from bot.storage.sessions import SessionStore
 
 def test_session_store_reads_legacy_integer(tmp_path: Path) -> None:
