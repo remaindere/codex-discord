@@ -87,7 +87,12 @@ class MemoryGuard:
                         fields[index].decode("utf-8", errors="surrogateescape")
                     )
             index += 1
-        return paths
+            
+        return {
+            path
+            for path in paths
+            if self._is_state_path(path)
+        }
 
     def _protected_snapshot(self) -> dict[str, ProtectedFile]:
         result: dict[str, ProtectedFile] = {}
@@ -149,6 +154,12 @@ class MemoryGuard:
             reverted=tuple(bad),
             protected_reverted=tuple(protected_changed),
             preexisting_dirty=tuple(sorted(before.dirty_paths)),
+        )
+
+    def _is_state_path(self, relative: str) -> bool:
+        return (
+            relative in FROZEN_PATHS
+            or any(relative.startswith(prefix) for prefix in ALLOWED_PREFIXES)
         )
 
     def _safe_path(self, relative: str) -> Path:
