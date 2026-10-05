@@ -45,7 +45,7 @@ class Settings:
     raw_dir: Path
     data_dir: Path
     state_git_dir: Path
-    default_model: str
+    codex_model: str
     chat_model: str
     codex_timeout_seconds: int
     cost_alert_step: float
@@ -76,12 +76,12 @@ class Settings:
             values.get("RAW_DIR", str(base_dir / "raw" / "discord"))
         ).expanduser()
 
-        default_model = values.get("DEFAULT_MODEL", "").strip()
-        chat_model = values.get("CHAT_MODEL", default_model).strip()
+        codex_model = values.get("CODEX_MODEL", "").strip()
+        chat_model = values.get("CHAT_MODEL", "").strip()
         missing = [
             name
             for name, value in (
-                ("DEFAULT_MODEL", default_model),
+                ("CODEX_MODEL", codex_model),
                 ("CHAT_MODEL", chat_model),
             )
             if not value

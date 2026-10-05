@@ -21,7 +21,7 @@ from bot.message_splitter import split_discord_message
 from bot.models.codex_cli import CodexCli
 from bot.models.direct_chat import DirectChat
 from bot.prompts import attachment_context, codex_prompt
-from bot.routing import Route, route_request
+from bot.routing import Route, RouteContext, route_request
 from bot.storage.costs import CostStore
 from bot.storage.history import ConversationHistory
 from bot.storage.raw_records import RawRecord
@@ -39,6 +39,20 @@ MODEL_ALIASES = {
     "!terra": "openai.gpt-5.6-terra",
 }
 
+ROUTE_PREFIXES = {
+    "!codex": Route.CODEX,
+    "!chat": Route.CHAT,
+}
+
+def _strip_route_prefix(question: str) -> str:
+    parts = question.strip().split(maxsplit=1)
+    if not parts:
+        return ""
+
+    if parts[0].casefold() in ROUTE_PREFIXES:
+        return parts[1].strip() if len(parts) == 2 else ""
+
+    return question.strip()
 
 def session_key(message: discord.Message) -> str:
     channel = message.channel
@@ -54,7 +68,8 @@ class CodexDiscordBot(discord.Client):
         super().__init__(**kwargs)
         self.settings = settings
         self.sessions = SessionStore(
-            settings.data_dir / "sessions.json", settings.default_model
+            settings.data_dir / "sessions.json",
+            settings.codex_model,
         )
         self.costs = CostStore(
             settings.data_dir / "usage.jsonl",
@@ -116,21 +131,58 @@ class CodexDiscordBot(discord.Client):
             await self._handle_request(message, question, key)
 
     async def _handle_request(
-        self, message: discord.Message, question: str, key: str
+        self,
+        message: discord.Message,
+        question: str,
+        key: str,
     ) -> None:
         raw: RawRecord | None = None
         conversation_id = ""
         stage = "initialize"
         error_id = uuid.uuid4().hex[:12]
+
         try:
             session = await self.sessions.get(key)
             conversation_id = session.conversation_id
-            decision = route_request(question, message.attachments)
+
+            previous_route: Route | None = None
+            if session.last_route is not None:
+                try:
+                    previous_route = Route(session.last_route)
+                except ValueError:
+                    logger.warning(
+                        "invalid last_route=%r key=%s",
+                        session.last_route,
+                        key,
+                    )
+
+            decision = route_request(
+                question,
+                RouteContext(
+                    has_attachments=bool(message.attachments),
+                    previous_route=previous_route,
+                ),
+            )
+
+            await self.sessions.set_last_route(
+                key,
+                decision.route.value,
+            )
+
+            question = _strip_route_prefix(question)
+
+            if not question and not message.attachments:
+                await message.channel.send(
+                    "사용법: `!codex 질문` 또는 `!chat 질문`"
+                )
+                return
+
             used_model = (
                 self.settings.chat_model
                 if decision.route is Route.CHAT
                 else session.model
             )
+
             logger.info(
                 "request message=%s conversation=%s route=%s reason=%s model=%s",
                 message.id,
