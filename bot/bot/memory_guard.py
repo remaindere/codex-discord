@@ -46,6 +46,7 @@ class ProtectedFile:
 class RequestSnapshot:
     dirty_paths: frozenset[str]
     protected: dict[str, ProtectedFile]
+    frozen: dict[str, ProtectedFile]
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,35 @@ class MemoryGuard:
             if self._is_state_path(path)
         }
 
+    def _frozen_snapshot(self) -> dict[str, ProtectedFile]:
+        result: dict[str, ProtectedFile] = {}
+
+        for relative in FROZEN_PATHS:
+            root = self.base_dir / relative
+
+            if root.is_file() and not root.is_symlink():
+                content = root.read_bytes()
+                result[relative] = ProtectedFile(
+                    digest=hashlib.sha256(content).hexdigest(),
+                    content=content,
+                )
+                continue
+
+            if root.is_dir() and not root.is_symlink():
+                for path in root.rglob("*"):
+                    if path.is_file() and not path.is_symlink():
+                        content = path.read_bytes()
+                        child = path.relative_to(
+                            self.base_dir
+                        ).as_posix()
+
+                        result[child] = ProtectedFile(
+                            digest=hashlib.sha256(content).hexdigest(),
+                            content=content,
+                        )
+
+        return result
+
     def _protected_snapshot(self) -> dict[str, ProtectedFile]:
         result: dict[str, ProtectedFile] = {}
 
@@ -183,15 +213,28 @@ class MemoryGuard:
         return RequestSnapshot(
             dirty_paths=frozenset(self.changed_paths()),
             protected=self._protected_snapshot(),
+            frozen=self._frozen_snapshot(),
         )
 
     def audit(self, before: RequestSnapshot) -> AuditResult:
         current = self.changed_paths()
 
+        # A filesystem rename may appear as:
+        #   - deleted tracked source path
+        #   - untracked destination path
+        #
+        # `changed_paths()` sees both paths only when Git reports both, but
+        # the source can disappear from the worktree without retaining an
+        # explicit rename relationship. Detect missing tracked state files
+        # separately so a bad rename can restore its original source.
+        missing_tracked = self._missing_tracked_state_paths()
+
         # Only changes introduced during this request are considered.
         request_paths = current - before.dirty_paths
+        request_deleted_paths = missing_tracked - before.dirty_paths
 
         protected_now = self._protected_snapshot()
+        frozen_now = self._frozen_snapshot()
 
         protected_changed = sorted(
             path
@@ -199,10 +242,20 @@ class MemoryGuard:
             if before.protected.get(path) != protected_now.get(path)
         )
 
-        if protected_changed:
+        frozen_changed = sorted(
+            path
+            for path in before.frozen.keys() | frozen_now.keys()
+            if before.frozen.get(path) != frozen_now.get(path)
+        )
+
+        protected_changed_all = sorted(
+            set(protected_changed) | set(frozen_changed)
+        )
+
+        if protected_changed_all:
             print(
                 "[MemoryGuard] protected files changed:",
-                protected_changed,
+                protected_changed_all,
             )
 
         # changed_paths() returns paths under the state roots.
@@ -215,24 +268,42 @@ class MemoryGuard:
             or not self._is_allowed_state_path(path)
         )
 
+        # A deleted tracked state path is also a request-time revert target.
+        # This is what restores the source side of a rename. Frozen paths are
+        # restored from their snapshot below, so do not classify them here.
+        deleted_for_revert = sorted(
+            path
+            for path in request_deleted_paths
+            if not self._is_frozen_path(path)
+        )
+
+        reverted_paths = sorted(
+            set(bad) | set(deleted_for_revert)
+        )
+
         updated = sorted(
             request_paths
             - set(bad)
+            - set(deleted_for_revert)
         )
 
         self._restore_request_paths(
-            bad,
+            reverted_paths,
             before.dirty_paths,
         )
         self._restore_protected(
             protected_changed,
             before.protected,
         )
+        self._restore_protected(
+            frozen_changed,
+            before.frozen,
+        )
 
         return AuditResult(
             updated=tuple(updated),
-            reverted=tuple(bad),
-            protected_reverted=tuple(protected_changed),
+            reverted=tuple(reverted_paths),
+            protected_reverted=tuple(protected_changed_all),
             preexisting_dirty=tuple(
                 sorted(before.dirty_paths)
             ),
@@ -264,6 +335,39 @@ class MemoryGuard:
             ).returncode
             == 0
         )
+
+    def _missing_tracked_state_paths(self) -> set[str]:
+        """Return tracked state files that no longer exist in the worktree.
+
+        `git status` can represent a filesystem rename as a deleted tracked
+        path plus an untracked new path. `changed_paths()` intentionally
+        keeps only the paths reported by status, so the deleted source path
+        must be checked separately to make the rename reversible.
+        """
+        raw = self._git(
+            "ls-files",
+            "-z",
+        ).stdout
+
+        missing: set[str] = set()
+
+        for field in raw.split(b"\0"):
+            if not field:
+                continue
+
+            relative = field.decode(
+                "utf-8",
+                errors="surrogateescape",
+            )
+
+            if not self._is_state_path(relative):
+                continue
+
+            target = self._safe_path(relative)
+            if not target.exists() and not target.is_symlink():
+                missing.add(relative)
+
+        return missing
 
     def _restore_request_paths(
         self,
