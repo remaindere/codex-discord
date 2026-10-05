@@ -1,0 +1,8 @@
+boto3>=1.40
+discord.py>=2.6
+openai>=1.100
+pypdf>=5
+pypdfium2>=4
+python-dotenv>=1.1
+ddgs>=9
+tavily-python>=0.7

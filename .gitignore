@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# MemoryGuard internal git repo
+.state.git/
+
+# Runtime/private data
+data/
+raw/
+memory/facts
+memory/records
+memory/wiki_pages
+memory/wiki_records
+
+# Generated local state
+*.log
