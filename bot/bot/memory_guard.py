@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-PROTECTED_DIRS = ("bot", "llm-wiki", "provisioning")
+PROTECTED_DIRS = ("bot", "provisioning")
 ALLOWED_PREFIXES = (
     "memory/facts/",
     "memory/records/",
