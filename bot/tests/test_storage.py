@@ -1,3 +1,8 @@
+import Path
+import json
+import asyncio
+from bot.storage.sessions import SessionStore
+
 def test_session_store_reads_legacy_integer(tmp_path: Path) -> None:
     async def scenario() -> None:
         path = tmp_path / "sessions.json"

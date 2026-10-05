@@ -146,7 +146,7 @@ class Settings:
             raw_dir=raw_dir.resolve(),
             data_dir=data_dir.resolve(),
             state_git_dir=base_dir / ".state.git",
-            default_model=default_model,
+            codex_model=codex_model,
             chat_model=chat_model,
             codex_timeout_seconds=_positive_int(
                 values, "CODEX_TIMEOUT_SECONDS", 900
